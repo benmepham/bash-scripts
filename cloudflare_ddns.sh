@@ -1,25 +1,22 @@
+
 #!/bin/bash
 
-# Copy to Crontab to run every 5 mins
-#*/5 * * * * /.../cloudflare-ddns-update.sh >/dev/null 2>&1
+# COPY TO CRONTAB
+#*/15 * * * * /home/ben/tasks/ddns.sh >/dev/null 2>&1
 
 # A bash script to update a Cloudflare DNS A record with the external IP of the source machine
-# Used to provide DDNS service for my home
 # Needs the DNS record pre-creating on Cloudflare
-
-# Proxy - uncomment and provide details if using a proxy
-#export https_proxy=http://<proxyuser>:<proxypassword>@<proxyip>:<proxyport>
+# Based on: https://gist.github.com/foobarhl/2480f956d26d49b035bf03ea1b01b40f
+# Uses Cloudflare per site API Tokens (needs DNS:Edit for your domain zone)
 
 # Cloudflare zone is the zone which holds the record
 zone=
 # dnsrecord is the A record which will be updated
 dnsrecord=
-
-## Cloudflare authentication details
-## keep these private
-cloudflare_auth_email=
+# zoneid from domain overview page
+zoneid=
+# Cloudflare auth key
 cloudflare_auth_key=
-
 
 # Get the current external IP address
 ip=$(curl -s -X GET https://checkip.amazonaws.com)
@@ -31,27 +28,13 @@ if host $dnsrecord 1.1.1.1 | grep "has address" | grep "$ip"; then
   exit
 fi
 
-# if here, the dns record needs updating
-
-# get the zone id for the requested zone
-zoneid=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$zone&status=active" \
-  -H "X-Auth-Email: $cloudflare_auth_email" \
-  -H "Authorization: Bearer $cloudflare_auth_key" \
-  -H "Content-Type: application/json" | jq -r '{"result"}[] | .[0] | .id')
-
-echo "Zoneid for $zone is $zoneid"
-
 # get the dns record id
-dnsrecordid=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$zoneid/dns_records?type=A&name=$dnsrecor$
-  -H "X-Auth-Email: $cloudflare_auth_email" \
+dnsrecordid=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$zoneid/dns_records?type=A&name=$dnsrecord" \
   -H "Authorization: Bearer $cloudflare_auth_key" \
-  -H "Content-Type: application/json" | jq -r '{"result"}[] | .[0] | .id')
-
-echo "DNSrecordid for $dnsrecord is $dnsrecordid"
+  -H "Content-Type: application/json" | jq -r  '{"result"}[] | .[0] | .id')
 
 # update the record
 curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$zoneid/dns_records/$dnsrecordid" \
-  -H "X-Auth-Email: $cloudflare_auth_email" \
   -H "Authorization: Bearer $cloudflare_auth_key" \
   -H "Content-Type: application/json" \
   --data "{\"type\":\"A\",\"name\":\"$dnsrecord\",\"content\":\"$ip\",\"ttl\":1,\"proxied\":false}" | jq
